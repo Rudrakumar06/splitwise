@@ -16,9 +16,14 @@ function calculateShares(
   if (!Array.isArray(participants) || participants.length === 0)
     fail("At least one participant is required");
 
+  if (!Array.isArray(customAmounts))
+    fail("customAmounts must be an array");
+
   const customByUser = new Map();
   for (const item of customAmounts) {
     if (!item || !item.user) fail("Each custom amount must include a user");
+    if (customByUser.has(String(item.user)))
+      fail("Custom amounts cannot contain duplicate users");
     const amount = money(item.amount);
     if (!Number.isFinite(amount) || amount < 0)
       fail("Custom amounts cannot be negative");

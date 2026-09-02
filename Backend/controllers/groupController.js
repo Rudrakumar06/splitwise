@@ -6,7 +6,9 @@ const { getGroup, validId } = require("../services/groupService");
 
 exports.createGroup = asyncHandler(async (req, res) => {
   const { name, description = "" } = req.body;
-  if (!name || !name.trim()) fail("Group name is required");
+  if (typeof name !== "string" || !name.trim())
+    fail("Group name is required");
+  if (typeof description !== "string") fail("Description must be a string");
   const group = await Group.create({
     name: name.trim(),
     description,
@@ -45,9 +47,12 @@ exports.updateGroup = asyncHandler(async (req, res) => {
   if (String(group.createdBy._id) !== String(req.user._id))
     fail("Only the group creator can update the group", 403);
   const { name, description } = req.body;
-  if (name !== undefined && !name.trim()) fail("Group name cannot be empty");
+  if (name !== undefined && (typeof name !== "string" || !name.trim()))
+    fail("Group name cannot be empty");
+  if (description !== undefined && typeof description !== "string")
+    fail("Description must be a string");
   if (name !== undefined) group.name = name.trim();
-  if (description !== undefined) group.description = description;
+  if (description !== undefined) group.description = description.trim();
   await group.save();
   return success(res, 200, "Group updated successfully", group);
 });

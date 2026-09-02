@@ -17,8 +17,11 @@ function expensePayload(body, group, userId, existing = {}) {
     body.participants === undefined
       ? existing.participants.map((item) => item.user)
       : body.participants;
+  // Switching to an equal split must discard any previously saved custom shares.
   const customAmounts =
-    body.customAmounts === undefined
+    splitType === "EQUAL"
+      ? []
+      : body.customAmounts === undefined
       ? existing.participants
           .filter((item) => item.isCustomAmount)
           .map((item) => ({ user: item.user, amount: item.shareAmount }))
@@ -50,7 +53,10 @@ function expensePayload(body, group, userId, existing = {}) {
 
 exports.createExpense = asyncHandler(async (req, res) => {
   const group = await getGroup(req.params.groupId, req.user._id);
-  if (!req.body.description || !req.body.description.trim())
+  if (
+    typeof req.body.description !== "string" ||
+    !req.body.description.trim()
+  )
     fail("Expense description is required");
   const expense = await Expense.create({
     group: group._id,
@@ -111,8 +117,9 @@ async function findAuthorizedExpense(req) {
 exports.updateExpense = asyncHandler(async (req, res) => {
   const { group, expense } = await findAuthorizedExpense(req);
   const payload = expensePayload(req.body, group, req.user._id, expense);
-  if (!payload.description || !payload.description.trim())
+  if (typeof payload.description !== "string" || !payload.description.trim())
     fail("Expense description is required");
+  payload.description = payload.description.trim();
   Object.assign(expense, payload);
   await expense.save();
   return success(res, 200, "Expense updated successfully", expense);

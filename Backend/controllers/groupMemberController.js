@@ -1,5 +1,6 @@
 const User = require("../models/User");
 const Expense = require("../models/Expense");
+const Settlement = require("../models/Settlement");
 const Group = require("../models/Group");
 const { asyncHandler, fail, success } = require("../utils/api");
 const { getGroup, validId } = require("../services/groupService");
@@ -7,7 +8,8 @@ const { getGroup, validId } = require("../services/groupService");
 exports.addMember = asyncHandler(async (req, res) => {
   const group = await getGroup(req.params.groupId, req.user._id);
   const email = req.body.email;
-  if (!email) fail("Member email is required");
+  if (typeof email !== "string" || !email.trim())
+    fail("Member email is required");
   const user = await User.findOne({ email: email.trim().toLowerCase() });
   if (!user) fail("User with that email does not exist", 404);
   if (group.members.some((member) => String(member._id) === String(user._id)))
@@ -26,15 +28,24 @@ exports.removeMember = asyncHandler(async (req, res) => {
     fail("The group creator cannot be removed", 400);
   if (!group.members.some((member) => String(member._id) === req.params.userId))
     fail("User is not a group member", 404);
-  const hasExpenseData = await Expense.exists({
+  const [hasExpenseData, hasSettlementData] = await Promise.all([
+    Expense.exists({
     group: group._id,
     $or: [
       { paidBy: req.params.userId },
       { "participants.user": req.params.userId },
     ],
-  });
-  if (hasExpenseData)
-    fail("Cannot remove a member referenced by existing expenses", 400);
+    }),
+    Settlement.exists({
+      group: group._id,
+      $or: [{ fromUser: req.params.userId }, { toUser: req.params.userId }],
+    }),
+  ]);
+  if (hasExpenseData || hasSettlementData)
+    fail(
+      "Cannot remove a member referenced by existing expenses or settlements",
+      400,
+    );
   group.members = group.members.filter(
     (member) => String(member._id) !== req.params.userId,
   );

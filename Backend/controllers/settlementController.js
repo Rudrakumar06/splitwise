@@ -11,7 +11,8 @@ exports.createSettlement = asyncHandler(async (req, res) => {
     fail("You can only record settlements made by yourself", 403);
   if (String(fromUser) === String(toUser))
     fail("fromUser and toUser must be different");
-  if (!Number.isFinite(Number(amount)) || Number(amount) <= 0)
+  const roundedAmount = Math.round(Number(amount) * 100) / 100;
+  if (!Number.isFinite(roundedAmount) || roundedAmount <= 0)
     fail("Settlement amount must be greater than 0");
   const members = new Set(group.members.map((member) => String(member._id)));
   if (!members.has(String(fromUser)) || !members.has(String(toUser)))
@@ -20,7 +21,7 @@ exports.createSettlement = asyncHandler(async (req, res) => {
     group: group._id,
     fromUser,
     toUser,
-    amount: Math.round(Number(amount) * 100) / 100,
+    amount: roundedAmount,
   });
   return success(
     res,

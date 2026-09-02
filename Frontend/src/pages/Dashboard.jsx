@@ -1,0 +1,6 @@
+import { Link } from 'react-router-dom'; import { useEffect, useState } from 'react';
+import api, { apiMessage } from '../services/api'; import Layout from '../components/Layout'; import { Alert, Empty, Loading } from '../components/Feedback';
+
+export default function Dashboard() { const [groups, setGroups] = useState([]); const [error, setError] = useState(''); const [loading, setLoading] = useState(true);
+  useEffect(() => { api.get('/groups').then(({ data }) => setGroups(data.data)).catch(e => setError(apiMessage(e, 'Unable to load groups.'))).finally(() => setLoading(false)); }, []);
+  return <Layout><div className="page-heading"><div><h1>Your groups</h1><p>{groups.length} group{groups.length === 1 ? '' : 's'} shared with you.</p></div><Link className="button" to="/groups/new">Create group</Link></div><Alert>{error}</Alert>{loading ? <Loading /> : groups.length ? <div className="card-grid">{groups.map(g => <article className="card" key={g._id}><h2>{g.name}</h2><p>{g.description || 'No description provided.'}</p><small>{g.members?.length || 0} members</small><Link className="button secondary" to={`/groups/${g._id}`}>Open group</Link></article>)}</div> : <Empty>No groups yet. Create one to get started.</Empty>}</Layout>; }

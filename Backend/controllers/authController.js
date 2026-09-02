@@ -13,7 +13,14 @@ function tokenFor(user) {
 
 exports.register = asyncHandler(async (req, res) => {
   const { name, email, password } = req.body;
-  if (!name || !email || !password)
+  if (
+    typeof name !== "string" ||
+    typeof email !== "string" ||
+    typeof password !== "string" ||
+    !name.trim() ||
+    !email.trim() ||
+    !password
+  )
     fail("Name, email, and password are required");
   if (password.length < 6) fail("Password must be at least 6 characters");
   const normalizedEmail = email.trim().toLowerCase();
@@ -32,7 +39,13 @@ exports.register = asyncHandler(async (req, res) => {
 
 exports.login = asyncHandler(async (req, res) => {
   const { email, password } = req.body;
-  if (!email || !password) fail("Email and password are required");
+  if (
+    typeof email !== "string" ||
+    typeof password !== "string" ||
+    !email.trim() ||
+    !password
+  )
+    fail("Email and password are required");
   const user = await User.findOne({ email: email.trim().toLowerCase() });
   if (!user || !(await bcrypt.compare(password, user.password)))
     fail("Invalid email or password", 401);
