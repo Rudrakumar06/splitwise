@@ -2,6 +2,8 @@ const Expense = require("../models/Expense");
 const { asyncHandler, fail, success } = require("../utils/api");
 const { calculateShares } = require("../services/splitService");
 const { getGroup, validId } = require("../services/groupService");
+const { invalidateGroupBalances } = require("../services/balanceService");
+const { notifyExpenseAdded } = require("../services/notificationService");
 
 function memberIds(group) {
   return new Set(group.members.map((member) => String(member._id)));
@@ -13,6 +15,12 @@ function expensePayload(body, group, userId, existing = {}) {
   const paidBy = body.paidBy === undefined ? existing.paidBy : body.paidBy;
   const splitType =
     body.splitType === undefined ? existing.splitType : body.splitType;
+  const category =
+    body.category === undefined ? existing.category || "Other" : body.category;
+  const receiptImage =
+    body.receiptImage === undefined
+      ? existing.receiptImage || ""
+      : body.receiptImage;
   const participants =
     body.participants === undefined
       ? existing.participants.map((item) => item.user)
@@ -44,6 +52,8 @@ function expensePayload(body, group, userId, existing = {}) {
     totalAmount,
     paidBy,
     splitType,
+    category,
+    receiptImage,
     participants: shares,
     description:
       body.description === undefined ? existing.description : body.description,
@@ -62,26 +72,49 @@ exports.createExpense = asyncHandler(async (req, res) => {
     group: group._id,
     ...expensePayload(req.body, group, req.user._id),
   });
+  await invalidateGroupBalances(group._id);
+  const populatedExpense = await expense.populate([
+    { path: "paidBy", select: "name email" },
+    { path: "participants.user", select: "name email" },
+    { path: "createdBy", select: "name email" },
+  ]);
+  await notifyExpenseAdded(group, populatedExpense, req.user._id);
   return success(
     res,
     201,
     "Expense created successfully",
-    await expense.populate([
-      { path: "paidBy", select: "name email" },
-      { path: "participants.user", select: "name email" },
-      { path: "createdBy", select: "name email" },
-    ]),
+    populatedExpense,
   );
 });
 
 exports.getExpenses = asyncHandler(async (req, res) => {
   const group = await getGroup(req.params.groupId, req.user._id);
-  const expenses = await Expense.find({ group: group._id })
-    .populate("paidBy", "name email")
-    .populate("participants.user", "name email")
-    .populate("createdBy", "name email")
-    .sort({ createdAt: -1 });
-  return success(res, 200, "Expenses retrieved successfully", expenses);
+
+  // Pagination keeps the response size bounded for large groups.
+  const page = Math.max(1, Number(req.query.page) || 1);
+  const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 20));
+  const skip = (page - 1) * limit;
+
+  const [expenses, total] = await Promise.all([
+    Expense.find({ group: group._id })
+      .populate("paidBy", "name email")
+      .populate("participants.user", "name email")
+      .populate("createdBy", "name email")
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit),
+    Expense.countDocuments({ group: group._id }),
+  ]);
+
+  return success(res, 200, "Expenses retrieved successfully", {
+    expenses,
+    pagination: {
+      page,
+      limit,
+      total,
+      totalPages: Math.ceil(total / limit) || 1,
+    },
+  });
 });
 
 exports.getExpenseById = asyncHandler(async (req, res) => {
@@ -122,11 +155,13 @@ exports.updateExpense = asyncHandler(async (req, res) => {
   payload.description = payload.description.trim();
   Object.assign(expense, payload);
   await expense.save();
+  await invalidateGroupBalances(expense.group);
   return success(res, 200, "Expense updated successfully", expense);
 });
 
 exports.deleteExpense = asyncHandler(async (req, res) => {
   const { expense } = await findAuthorizedExpense(req);
   await expense.deleteOne();
+  await invalidateGroupBalances(expense.group);
   return success(res, 200, "Expense deleted successfully", null);
 });

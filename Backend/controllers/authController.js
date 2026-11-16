@@ -3,12 +3,13 @@ const jwt = require("jsonwebtoken");
 const User = require("../models/User");
 const { asyncHandler, fail, success } = require("../utils/api");
 
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) {
+  throw new Error("JWT_SECRET is not set. Run the server via server.js (which validates env).");
+}
+
 function tokenFor(user) {
-  return jwt.sign(
-    { id: user._id },
-    process.env.JWT_SECRET || "development-secret",
-    { expiresIn: "7d" },
-  );
+  return jwt.sign({ id: user._id }, JWT_SECRET, { expiresIn: "7d" });
 }
 
 exports.register = asyncHandler(async (req, res) => {

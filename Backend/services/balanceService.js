@@ -1,5 +1,6 @@
 const Expense = require("../models/Expense");
 const Settlement = require("../models/Settlement");
+const BalanceCache = require("../models/BalanceCache");
 const { money } = require("./splitService");
 
 async function calculateBalances(group) {
@@ -34,7 +35,9 @@ async function calculateBalances(group) {
     );
     balances.set(
       String(settlement.toUser),
-      money((balances.get(String(settlement.toUser)) || 0) - settlement.amount),
+      money(
+        (balances.get(String(settlement.toUser)) || 0) - settlement.amount,
+      ),
     );
   }
   return group.members.map((member) => ({
@@ -43,4 +46,29 @@ async function calculateBalances(group) {
   }));
 }
 
-module.exports = { calculateBalances };
+/**
+ * Returns the cached balances for a group, computing and storing them if the
+ * cache is empty or stale. Cache is invalidated (deleted) on every write.
+ */
+async function getGroupBalances(group) {
+  const cached = await BalanceCache.findOne({ group: group._id }).lean();
+  if (cached) return cached.data;
+
+  const data = await calculateBalances(group);
+  await BalanceCache.updateOne(
+    { group: group._id },
+    { $set: { data } },
+    { upsert: true },
+  );
+  return data;
+}
+
+/**
+ * Invalidates the cached balances for a group. Call after any expense or
+ * settlement write so the next read recomputes from the source of truth.
+ */
+async function invalidateGroupBalances(groupId) {
+  await BalanceCache.deleteOne({ group: groupId });
+}
+
+module.exports = { calculateBalances, getGroupBalances, invalidateGroupBalances };

@@ -1,5 +1,11 @@
 require('dotenv').config();
 
+const validateEnv = require('./config/env');
+
+// Fail fast if required secrets are missing or too weak. Must run before
+// requiring ./app, which loads the auth controller that reads JWT_SECRET.
+validateEnv();
+
 const app = require('./app');
 const connectDatabase = require('./config/db');
 

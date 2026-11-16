@@ -4,6 +4,7 @@ const Settlement = require("../models/Settlement");
 const Group = require("../models/Group");
 const { asyncHandler, fail, success } = require("../utils/api");
 const { getGroup, validId } = require("../services/groupService");
+const { notifyMemberJoined } = require("../services/notificationService");
 
 exports.addMember = asyncHandler(async (req, res) => {
   const group = await getGroup(req.params.groupId, req.user._id);
@@ -16,6 +17,7 @@ exports.addMember = asyncHandler(async (req, res) => {
     fail("User is already a group member", 409);
   group.members.push(user._id);
   await group.save();
+  await notifyMemberJoined(group, user, req.user._id);
   return success(res, 201, "Member added successfully", user);
 });
 

@@ -11,6 +11,16 @@ const userSchema = new mongoose.Schema(
       unique: true,
     },
     password: { type: String, required: true },
+    avatar: { type: String, default: "" },
+    phone: { type: String, default: "", trim: true },
+    bio: { type: String, default: "", trim: true, maxlength: 200 },
+    notifications: {
+      email: { type: Boolean, default: true },
+      push: { type: Boolean, default: true },
+      expenseAdded: { type: Boolean, default: true },
+      settlementRecorded: { type: Boolean, default: true },
+      memberJoined: { type: Boolean, default: true },
+    },
   },
   { timestamps: true },
 );
